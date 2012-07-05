@@ -50,7 +50,6 @@ sub ask_comparator
 			# Mark everything under this as "not-better" to prevent random questions when the tree is rebalanced.
 			my $it = $tree->iter($b);
 			while (my $node = $it->next) {
-				say $node->key;
 				$answers{$a}{$node->key} = -1;
 				$answers{$node->key}{$a} = 1;
 			}
@@ -60,7 +59,6 @@ sub ask_comparator
 			# Mark everything over this as "better" to prevent random questions when the tree is rebalanced.
 			my $it = $tree->rev_iter($b);
 			while (my $node = $it->next) {
-				say $node->key;
 				$answers{$a}{$node->key} = 1;
 				$answers{$node->key}{$a} = -1;
 			}
