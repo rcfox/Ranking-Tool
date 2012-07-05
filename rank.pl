@@ -2,9 +2,24 @@
 use 5.012_000;
 use strict;
 use warnings;
+use English;
 use Term::ReadKey;
 use Tree::RB;
 use YAML qw/LoadFile DumpFile/;
+
+my $open_command = sub { say "Sorry, I don't know how to open files on your system." };
+if($OSNAME eq 'linux') { # Linux - works on Ubuntu!
+	my $cmd = "/usr/bin/xdg-open";
+	if(-x $cmd) {
+		$open_command = sub { system("$cmd $_[0]"); }
+	}
+}
+elsif($OSNAME eq 'MSWin32') { # Windows - untested
+	$open_command = sub { system("cmd /c start $_[0]"); }
+}
+elsif($OSNAME eq 'darwin') { # Mac OSX - untested
+	$open_command = sub { system("open $_[0]"); }
+}
 
 my %answers;
 if( -e "answers.yaml" ) {
@@ -53,11 +68,11 @@ sub ask_comparator
 		}
 		elsif ($key eq 'a') {
 			say "Opening $a";
-			system("xdg-open $a 2> /dev/null");
+			$open_command->($a);
 		}
 		elsif ($key eq 'b') {
 			say "Opening $b";
-			system("xdg-open $b 2> /dev/null");
+			$open_command->($b);
 		}
 		else {
 			say "Please answer with 'y' or 'n'.";
