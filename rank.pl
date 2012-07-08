@@ -3,27 +3,51 @@ use 5.012_000;
 use strict;
 use warnings;
 use English;
+use Getopt::Long;
 use Term::ReadKey;
 use Tree::RB;
 use YAML qw/LoadFile DumpFile/;
 
-my $open_command = sub { say "Sorry, I don't know how to open files on your system." };
-if($OSNAME eq 'linux') { # Linux - works on Ubuntu!
-	my $cmd = "/usr/bin/xdg-open";
-	if(-x $cmd) {
-		$open_command = sub { system("$cmd $_[0]"); }
+my $open_command = "";
+my $answers_file = "answers.yaml";
+my $show_tree = 0;
+my $show_list = 1;
+my $remove_item = 0;
+my $help = 0;
+GetOptions('open-with=s' => \$open_command,
+           'answers=s' => \$answers_file,
+           'show-list!' => \$show_list,
+           'show-tree' => \$show_tree,
+           'remove' => \$remove_item,
+           'help' => \$help);
+
+if($open_command eq "") {
+	$open_command = "unknown-command";
+	if($OSNAME eq 'linux') { # Linux - works on Ubuntu!
+		$open_command = "/usr/bin/xdg-open";
+	}
+	elsif($OSNAME eq 'MSWin32') { # Windows - untested
+		$open_command = "cmd /c start";
+	}
+	elsif($OSNAME eq 'darwin') { # Mac OSX - untested
+		$open_command = "open";
 	}
 }
-elsif($OSNAME eq 'MSWin32') { # Windows - untested
-	$open_command = sub { system("cmd /c start $_[0]"); }
-}
-elsif($OSNAME eq 'darwin') { # Mac OSX - untested
-	$open_command = sub { system("open $_[0]"); }
+
+if($help) {
+	say "$0 [OPTION]... [ITEM]...";
+	say "Options:";
+	say "  --remove\t\tRemove the given items rather than inserting.";
+	say "  --open-with=<command>\tChange the program used to preview items. (Default: $open_command)";
+	say "  --answers=<file>\tChange the file where answers are saved and loaded. (Default: $answers_file)";
+	say "  --show-tree\t\tDisplay the structure of the tree used to rank the items.";
+	say "  --noshow-list\t\tDisable the output of the current list of items.";
+	exit;
 }
 
 my %answers;
-if( -e "answers.yaml" ) {
-	%answers = %{LoadFile("answers.yaml")};
+if( -e $answers_file ) {
+	%answers = %{LoadFile($answers_file)};
 }
 
 my $tree = Tree::RB->new(\&ask_comparator);
@@ -66,11 +90,11 @@ sub ask_comparator
 		}
 		elsif ($key eq 'a') {
 			say "Opening $a";
-			$open_command->($a);
+			system("$open_command $a");
 		}
 		elsif ($key eq 'b') {
 			say "Opening $b";
-			$open_command->($b);
+			system("$open_command $b");
 		}
 		else {
 			say "Please answer with 'y' or 'n'.";
@@ -82,23 +106,47 @@ for(keys %answers) {
 	$tree->put($_);
 }
 
-for(@ARGV) {
-	if(!exists($answers{$_})) {
-		$answers{$_}{$_} = 0;
-		$tree->put($_);
+if(!$remove_item) {
+	for(@ARGV) {
+		if(!exists($answers{$_})) {
+			$answers{$_}{$_} = 0;
+			$tree->put($_);
+		}
+	}
+} else {
+	for(@ARGV) {
+		$tree->delete($_);
+		delete $answers{$_};
+		for my $other (keys %answers) {
+			delete $answers{$other}{$_};
+		}
 	}
 }
 
-if($tree->size() == 0) {
-	say "Nothing has been ranked yet!";
-} else {
-	say "Order so far:";
+if($show_list) {
+	if($tree->size() == 0) {
+		say "Nothing has been ranked yet!";
+	} else {
+		say "Order so far:";
+	}
+	
+	my $it = $tree->iter;
+	while (my $node = $it->next) {
+		say $node->key;
+	}
 }
 
-my $it = $tree->iter;
-while (my $node = $it->next)
-{
-	say $node->key;
+DumpFile($answers_file,\%answers);
+
+if($show_tree) {
+	if($tree->size() > 0) {
+		print_tree($tree);
+	}
 }
 
-DumpFile("answers.yaml",\%answers);
+sub print_tree {
+	use Tree::DAG_Node;
+	my $tree = Tree::DAG_Node->lol_to_tree( shift()->root->as_lol );
+	local $OUTPUT_FIELD_SEPARATOR = "\n";
+	say @{ $tree->draw_ascii_tree };
+}
